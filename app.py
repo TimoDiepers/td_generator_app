@@ -9,18 +9,6 @@ import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Temporal Distribution Builder", layout="centered")
 
-__doc__ = """
-This Streamlit app replicates the functionality of the interactive Jupyter
-widget provided by the user for drafting and visualizing temporal distributions.
-It provides both a generator mode, where distributions can be built using
-predefined shapes (uniform, triangular and normal), and a manual mode,
-where users can input their own dates and amounts.  The underlying
-TemporalDistribution class and helper functions are re-implemented here to
-avoid external dependencies on ``bw_temporalis`` while preserving the same
-API.  The generated Python code shown in the interface still refers to
-``bw_temporalis`` so users can integrate the output into their own projects.
-"""
-
 st.markdown(
     """
     <style>
@@ -43,9 +31,9 @@ def render_copy_button(code_text: str) -> None:
     escaped_code = json.dumps(code_text)
     components.html(
         f"""
-        <div style="margin-top:0.5rem;">
+        <div style="margin-top:0.5rem; width:100%;">
           <button id="{button_id}"
-                  style="padding:0.4rem 0.9rem; border-radius:0.5rem; border:1px solid #c3c6cf; background:#f1f3f6; cursor:pointer; font-size:0.9rem;">
+                  style="display:block; width:100%; box-sizing:border-box; padding:0.6rem 1rem; border-radius:0.5rem; border:1px solid #c3c6cf; background:#f1f3f6; cursor:pointer; font-size:0.9rem;">
             Copy code
           </button>
           <textarea id="{textarea_id}" style="position:fixed; top:-1000px; left:-1000px;"></textarea>
@@ -73,11 +61,30 @@ def render_copy_button(code_text: str) -> None:
 
 def render_distribution_chart(df: pd.DataFrame, axis_label: str) -> None:
     """Render the temporal distribution as a dot chart without connecting lines."""
+    axis_dtype = df["axis"].dtype
+    x_min = df["axis"].min()
+    x_max = df["axis"].max()
+
+    if np.issubdtype(axis_dtype, np.number):
+        x_min_py = float(x_min)
+        x_max_py = float(x_max)
+        if x_min_py == x_max_py:
+            x_min_py -= 0.5
+            x_max_py += 0.5
+        scale = alt.Scale(domain=[x_min_py, x_max_py], nice=False, zero=False)
+    elif np.issubdtype(axis_dtype, np.datetime64):
+        if x_min == x_max:
+            x_min = x_min - pd.Timedelta(seconds=1)
+            x_max = x_max + pd.Timedelta(seconds=1)
+        scale = alt.Scale(domain=[x_min, x_max], nice=False, zero=False)
+    else:
+        scale = alt.Scale(nice=False, zero=False)
+
     chart = (
         alt.Chart(df)
         .mark_circle(size=80)
         .encode(
-            x=alt.X("axis", title=axis_label),
+            x=alt.X("axis", title=axis_label, scale=scale),
             y=alt.Y("amount", title="Amount"),
             tooltip=[
                 alt.Tooltip("axis", title=axis_label),
@@ -432,12 +439,8 @@ with tab_generator:
     max_steps = max(1, int(end_val - start_val) + 1)
     min_steps = 1 if max_steps < 2 else 2
     steps_key = "generator_steps_value"
-    if steps_key not in st.session_state:
-        st.session_state[steps_key] = 11
-    st.session_state[steps_key] = max(
-        min_steps, min(st.session_state[steps_key], max_steps)
-    )
-    stored_steps = st.session_state[steps_key]
+    stored_steps = st.session_state.get(steps_key, 11)
+    stored_steps = max(min_steps, min(stored_steps, max_steps))
 
     steps_col, param_col = st.columns((1, 1))
     with steps_col:
@@ -512,7 +515,7 @@ with tab_generator:
             controls_cols = st.columns((1, 1))
             with controls_cols[1]:
                 include_imports_value = st.checkbox(
-                    "Include imports",
+                    "Include import statements",
                     key=include_key,
                 )
             code_text = build_code(
@@ -588,7 +591,7 @@ with tab_manual:
             controls_cols = st.columns((1, 1))
             with controls_cols[1]:
                 include_imports_value = st.checkbox(
-                    "Include imports",
+                    "Include import statements",
                     key=include_key,
                 )
             code_text = build_code(
