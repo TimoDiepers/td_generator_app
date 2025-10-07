@@ -515,7 +515,7 @@ with tab_generator:
             controls_cols = st.columns((1, 1))
             with controls_cols[1]:
                 include_imports_value = st.checkbox(
-                    "Include import statements",
+                    "Include imports",
                     key=include_key,
                 )
             code_text = build_code(
@@ -591,7 +591,7 @@ with tab_manual:
             controls_cols = st.columns((1, 1))
             with controls_cols[1]:
                 include_imports_value = st.checkbox(
-                    "Include import statements",
+                    "Include imports",
                     key=include_key,
                 )
             code_text = build_code(
